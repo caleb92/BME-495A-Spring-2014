@@ -1,0 +1,103 @@
+-----TX_nn.lua-----
+require 'nn'
+require 'gnuplot'
+
+train_n = 100 --training dataset size
+test_n = 50 --test dataset size
+epochs_max = 50 --maximum number of epochs
+err_acceptable = .1 --acceptable error
+
+noise_n=8;
+
+L1 = 25; --inputs
+L2 = 20;--hidden layer units
+L3 = 1; --output
+
+plot_train = torch.zeros(epochs_max);
+plot_test = torch.zeros(epochs_max);
+
+--Generate clean t matrix--
+t=torch.Tensor(5,5):zero()
+t[3]=torch.ones(5)
+t[{{},{3}}]=torch.ones(5)
+t:resize(25)
+
+--Generate clean x matrix--
+x=torch.Tensor(5,5):zero()
+for i=1,5 do
+  x[i][i]=1
+  x[i][6-i]=1
+end
+x:resize(25)
+
+--Dataset--
+data_train={}
+data_test={}
+for i=1,(train_n+test_n) do
+  local output=torch.rand(1):mul(2):floor()--t=0, x=1; random output
+  local input=torch.add(torch.mul(t,1-output[1]),torch.mul(x,output[1]))
+  local noise_loc = torch.randperm(25):le(noise_n):type('torch.DoubleTensor')--returns 1 at noisy
+  input:add(-1,noise_loc):abs()--add noise
+  if i<=train_n then data_train[i]={input,output}
+  else data_test[i-train_n]={input,output} end
+end
+
+--Create Network--
+net=nn.Sequential();
+net:add(nn.Linear(L1,L2))
+net:add(nn.Sigmoid())
+net:add(nn.Linear(L2,L3))
+net:add(nn.Sigmoid())
+
+e=1
+epochs=nil
+while e<epochs_max do
+  --Training--
+  err=0;
+  criterion=nn.MSECriterion()
+  for i=1,train_n do
+    local x=data_train[i][1]; local y=data_train[i][2]; 
+    criterion:forward(net:forward(x),y)
+    net:zeroGradParameters()
+    net:backward(x,criterion:backward(net.output,y))
+    net:updateParameters(0.01)
+    
+    local pred=net:forward(x)
+    err=err+criterion:forward(pred,y)
+  end
+  err=err/train_n;
+  plot_train[e]=1-err 
+  
+  --Error of Test Data--
+  err=0;
+  for i=1,test_n do
+    local pred=net:forward(data_test[i][1])
+    err=err+criterion:forward(pred,data_test[i][2])
+  end
+
+  err=err/test_n;
+  plot_test[e]=1-err
+
+  --Check Loop--
+  if err<err_acceptable then epochs=e; e=epochs_max end
+  e=e+1;
+
+end
+
+--Plot--
+gnuplot.plot({plot_train,'p'},{plot_test,'-'})
+gnuplot.xlabel('Epochs')
+gnuplot.ylabel('Accuracy (1-MSE)')
+gnuplot.title("Resolving 'x' or 't' Network Accuracy")
+gnuplot.movelegend('right','middle')
+gnuplot.axis({0,epochs_max,0,1})
+
+
+--Print--
+io.write('\nt = ',tostring(net:forward(t)[1]))
+io.write('\nx = ',tostring(net:forward(x)[1]))
+--io.write('\n0 XNOR 1 = ',tostring(net:forward(x)[1]))
+--io.write('\n0 XNOR 0 = ',tostring(net:forward(x)[1]))
+io.write('\n\nAcceptable Error = ',tostring(err_acceptable))
+io.write('\nEpochs until Acceptable Error = '..tostring(epochs),'\n')
+
