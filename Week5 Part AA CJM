@@ -1,0 +1,85 @@
+-----XNOR_nn-----
+require 'nn'
+require 'gnuplot'
+
+train_n = 500 --training dataset size
+epochs_max = 50 --maximum number of epochs
+err_acceptable = .01 --acceptable error
+
+L1 = 2; --inputs
+L2 = 20;--hidden layer units
+L3 = 1; --output
+
+plot_train = torch.zeros(epochs_max);
+plot_test  = torch.zeros(epochs_max);
+
+--Dataset--
+data_train={}
+for i=1,train_n do
+  local x=torch.rand(2):mul(2):floor();
+  local y=torch.Tensor(1);
+  if x[1]<x[2] or x[2]<x[1]
+    then y[1]=1;
+    else y[1]=0;
+  end
+  data_train[i]={x,y}
+end
+data_test={}
+data_test[1]={torch.Tensor({1,1}),torch.Tensor({0})}
+data_test[2]={torch.Tensor({1,0}),torch.Tensor({1})}
+data_test[3]={torch.Tensor({0,1}),torch.Tensor({1})}
+data_test[4]={torch.Tensor({0,0}),torch.Tensor({0})}
+
+--Create Network--
+net=nn.Sequential();
+net:add(nn.Linear(L1,L2))
+net:add(nn.Sigmoid())
+net:add(nn.Linear(L2,L3))
+
+e=1
+while e<epochs_max do
+
+  --Training--
+  criterion = nn.MSECriterion()
+  for i=1,train_n do
+    local x=data_train[i][1]; local y=data_train[i][2]; 
+    criterion:forward(net:forward(x),y)
+    net:zeroGradParameters()
+    net:backward(x,criterion:backward(net.output,y))
+    net:updateParameters(0.01)
+
+    local pred=net:forward(x)
+    err=err+criterion:forward(pred,y)
+  end
+  err=err/train_n;
+  plot_train[e]=1-err
+
+  --Error of Test Data--
+  err=0;
+  for i=1,4 do
+    pred=net:forward(data_test[i][1])
+    err=err+criterion:forward(pred,data_test[i][2])
+  end
+  err=err/4;
+  plot_test[e]=1-err
+
+  --Check Loop--
+  if err<err_acceptable then epochs=e; e=epochs_max end
+  e=e+1;
+
+end
+
+--Plot--
+gnuplot.plot({plot_train,'p'},{plot_test,'-'})
+gnuplot.xlabel('Epochs')
+gnuplot.ylabel('Accuracy (1-MSE)')
+gnuplot.title('XNOR Network Accuracy')
+
+--Print--
+local x=torch.Tensor(2)
+x[1]=1; x[2]=1; io.write('\n1 XNOR 1 = ',tostring(net:forward(x)[1]))
+x[1]=1; x[2]=0; io.write('\n1 XNOR 0 = '..tostring(net:forward(x)[1]))
+x[1]=0; x[2]=1; io.write('\n0 XNOR 1 = '..tostring(net:forward(x)[1]))
+x[1]=0; x[2]=0; io.write('\n0 XNOR 0 = '..tostring(net:forward(x)[1]))
+io.write('\n\nAcceptable Error = ',tostring(err_acceptable))
+io.write('\nEpochs until Acceptable Error = '..tostring(epochs),'\n')
