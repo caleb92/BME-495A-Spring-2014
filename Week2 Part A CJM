@@ -1,0 +1,77 @@
+-----XNOR_plot-----
+require 'gnuplot'
+
+--Initialize Variables--
+y=1 				--actual output
+yh=1				--desired output
+x = torch.Tensor(2,3):fill(1)	--inputs
+w = torch.rand(3,3)*2-1		--multipliers
+
+L = .5				--learning coefficent			--
+iter_max = 15000			--maximum iterations
+
+plot_n=100 --number of plot points
+plot= torch.Tensor(2,plot_n):zero()--error to be plotted
+i=0; d=math.floor(iter_max/plot_n)
+plot[1]=plot[1]:apply(function() i=i+d return(i) end)
+plot= plot:t()
+sum=0
+
+
+
+---Hard-Limiter Function---
+function HL(z)
+  return(1/(1+math.exp(-z)))	--logistic sigmoid
+end
+
+
+---Evaluate Perceptron---
+function eval(x1,x2)
+  x[1][2]= x1
+  x[1][3]= x2
+
+  --determine desired output
+  if x[1][2]<x[1][3] or x[1][2]>x[1][3]
+    then yh=1 --desired output if true
+    else yh=0 --desired output if false
+  end
+
+  --evaluate layer outputs
+  x[2][2]= HL(x[1]*w[1])--Layer2 Neuron1
+  x[2][3]= HL(x[1]*w[2])--Layer2 Neuron2
+  y= HL(x[2]*w[3])	--Layer3 Neuron1
+  return(y)
+end
+
+
+for i=1,iter_max do
+
+  x1= math.random(0,1) --input 1 (random 0 or 1)
+  x2= math.random(0,1) --input 2 (random 0 or 1)
+
+  eval(x1,x2)
+
+  --compute errors
+  d21= y*(1-y)*(yh-y)			--error of final output
+  d11= x[2][2]*(1-x[2][2])*w[3][2]*d21	--error for hidden layer
+  d12= x[2][3]*(1-x[2][3])*w[3][3]*d21	--error for hidden layer
+ 
+  --adjust weights
+  w[3]= w[3]+x[2]*d21*L
+  w[1]= w[1]+x[1]*d11*L
+  w[2]= w[2]+x[1]*d12*L
+
+  if i%d==0 then
+    plot[i/d][1]=i
+    plot[i/d][2]=sum/d
+    sum=0
+    gnuplot.plot(plot)
+  else sum=sum+math.abs(y-yh)
+  end
+
+end
+
+io.write('\n0 XNOR 0 = ',tostring(eval(0,0)))
+io.write('\n0 XNOR 1 = ',tostring(eval(0,1)))
+io.write('\n1 XNOR 0 = ',tostring(eval(1,0)))
+io.write('\n1 XNOR 1 = ',tostring(eval(1,1)),'\n\n')
