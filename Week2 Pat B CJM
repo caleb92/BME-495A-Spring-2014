@@ -1,0 +1,90 @@
+------W4_2------
+require 'gnuplot'
+
+iter_max=1000 --training iterations
+noise=25 --number of noisy bits
+samples=50 --number of samples at each noise level
+
+err_plot=torch.Tensor(noise+1,2)
+err_plot[{{},{1}}]=torch.range(0,noise)
+
+--Generate clean t matrix--
+t=torch.Tensor(5,5):zero()
+t[3]=torch.ones(5)
+t[{{},{3}}]=torch.ones(5)
+
+--Generate clean x matrix--
+x=torch.Tensor(5,5):zero()
+for i=1,5 do
+  x[i][i]=1
+  x[i][6-i]=1
+end
+
+
+---Logistic Sigmoid Function---
+function LS(z)
+  return(1/(1+math.exp(-z)))
+end
+
+---Function adds noise to a 5x5 Tensor---
+function add_noise(datum, noise_number)
+  for i=1,noise_number do
+    local index = math.floor(25*math.random())+1 --random noise index
+    datum:storage()[index]=-1*(datum:storage()[index]-1) --flip value at index
+  end
+  return(datum)
+end
+
+---test function---
+function test(datum, weights, weight_bias, y_expected)
+  y = LS(weight_bias+torch.dot(weights,datum))
+  err = y_expected - y
+  return y,err
+end
+
+---train function---
+function train(iter_max, n)
+  L=0.5 --learning rate
+  wb=math.random() --random bias multiplier
+  w=torch.rand(5,5):mul(2):add(-1) --random input multipliers
+  yh=nil --expected output
+  data=torch.rand(iter_max):mul(2):floor()--training set; 0 is t, 1 is x
+
+  for iter=1,iter_max do
+    yh=data[iter] --0 for t, 1 for x
+    datum=torch.add(torch.mul(t,1-yh),torch.mul(x,yh))--current test matrix: t or x
+
+    datum=add_noise(datum,n)
+
+    y,err=test(datum,w,wb,yh)
+
+    w:add((L*y*(1-y)*err), datum)
+
+  end
+  return w,wb
+end
+
+---MAIN---
+for n=0,noise do
+  w,wb=train(iter_max,n)
+  
+  err_sum=0
+  for s=1,samples do
+    yh=math.random(0,1)
+    datum=torch.add(torch.mul(t,1-yh),torch.mul(x,yh))--current test matrix: t or x
+    datum=add_noise(datum,n)
+    y,err=test(datum,w,wb,yh)
+    err_sum=err_sum+math.abs(err)
+  end
+  
+  err_plot[n+1][2]=err_sum/samples
+  
+end
+
+gnuplot.plot(err_plot)
+gnuplot.axis({0,noise+1,0,1})
+gnuplot.xlabel('Number of Noisey Pixels')
+gnuplot.ylabel('Average Output Error')
+gnuplot.title("'X' or 'T' Classification Perceptron Error Curve")
+
+
